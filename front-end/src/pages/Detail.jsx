@@ -1,12 +1,23 @@
 import styled from "@emotion/styled";
 import { useEffect, useState } from "react";
 import axios from "axios";
-import { Button } from "@mui/material";
+import {
+  Button,
+  CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
+  Stack,
+} from "@mui/material";
 import KeyboardArrowLeftRoundedIcon from "@mui/icons-material/KeyboardArrowLeftRounded";
 import KeyboardArrowRightRoundedIcon from "@mui/icons-material/KeyboardArrowRightRounded";
 import { useNavigate } from "react-router-dom";
 import ApiKey from "../assets/secret.json";
 import WarningAmberRoundedIcon from "@mui/icons-material/WarningAmberRounded";
+import { chatGPTAdviceAtom } from "../state";
+import { useAtom } from "jotai";
 
 const Style = styled.div`
   display: flex;
@@ -16,6 +27,7 @@ const Style = styled.div`
   padding-top: 0;
   position: relative;
   justify-content: space-between;
+  min-height: 80vh;
 
   .container {
     display: flex;
@@ -67,7 +79,6 @@ const Style = styled.div`
     flex-direction: column;
     gap: 10px;
     text-align: center;
-    margin-bottom: 60px;
   }
 
   .error svg {
@@ -88,10 +99,30 @@ const Style = styled.div`
     font-size: 1.5em;
     margin-top: 20px;
   }
+
+  .loading {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
 `;
 
 const Detail = () => {
   const navigate = useNavigate();
+  const [flagError, setFlagError] = useState(false);
+
+  // ChatGpt API 답변
+  const [chatGPTAdvice, setChatGPTAdvice] = useAtom(chatGPTAdviceAtom);
+  const [chatGPTAdviceOpen, setChatGPTAdviceOpen] = useState(false);
+  const [chatGPTAdviceError, setChatGPTAdviceError] = useState(false);
+
+  const handleChatGPTAdviceClose = () => {
+    setChatGPTAdviceOpen(false);
+    setChatGPTAdvice("");
+    setChatGPTAdviceError(false);
+  };
+
   // API 통신
   const [data, setData] = useState(null); // API 데이터
 
@@ -112,11 +143,28 @@ const Detail = () => {
     document.body.removeChild(link);
   };
 
+  const timeout = 30000;
+  const getChatGptAdvice = async (downloadUrl) => {
+    try {
+      const response = await axios.get(
+        `http://localhost:3000/download?url=${downloadUrl}`,
+        {
+          timeout,
+          responseType: "text",
+        }
+      );
+      console.log(response.data);
+      setChatGPTAdvice(response.data);
+    } catch (error) {
+      console.error("Error fetching data:", error);
+      setChatGPTAdviceError(true);
+    }
+  };
+
   const fetchData = async () => {
     // URLSearchParams를 이용하여 쿼리 파라미터에서 id 값 읽기
     const queryParams = new URLSearchParams(location.search);
     const id = queryParams.get("id");
-    console.log("fetchData", id);
     try {
       await axios
         .get(
@@ -130,23 +178,28 @@ const Detail = () => {
           }
         )
         .then((response) => {
-          console.log(response);
           setData(response.data.result);
           console.log(response.data.result);
         });
       // ChatGpt에게 pdf 문서 전달
     } catch (error) {
       console.error("Error fetching data:", error);
+      setFlagError(true);
     }
   };
 
   useEffect(() => {
     fetchData();
+    setTimeout(() => {
+      if (!data) {
+        setFlagError(true);
+      }
+    }, 3000);
   }, []);
 
   return (
     <Style>
-      {data ? (
+      {data && (
         <>
           <div className="container left">
             <div>
@@ -179,7 +232,11 @@ const Detail = () => {
               <h3>채용인원</h3>
               <p>{data?.recrutNope}명</p>
               <h3>마감일</h3>
-              <p>{data?.pbancEndYmd}</p>
+              <p>
+                {data?.pbancEndYmd.substr(0, 4)}-
+                {data?.pbancEndYmd.substr(4, 2)}-
+                {data?.pbancEndYmd.substr(6, 2)}
+              </p>
             </div>
             <hr />
 
@@ -282,8 +339,12 @@ const Detail = () => {
               <Button
                 variant="outlined"
                 size="large"
-                disabled={!data?.files?.url}
+                disabled={data?.files[0]?.atchFileNm.split(".")[1] !== "pdf"}
                 onClick={() => {
+                  if (data?.files[0]?.atchFileNm.split(".")[1] !== "pdf") {
+                    return;
+                  }
+
                   const file = data?.files?.[0];
                   const splittedFileName = file.atchFileNm.split(".");
                   const fileExtension =
@@ -295,17 +356,82 @@ const Detail = () => {
               >
                 지원 공고 다운로드
               </Button>
+              <Button
+                variant="outlined"
+                size="large"
+                disabled={data?.files[0]?.atchFileNm.split(".")[1] !== "pdf"}
+                onClick={() => {
+                  if (data?.files[0]?.atchFileNm.split(".")[1] !== "pdf") {
+                    return;
+                  }
+                  getChatGptAdvice(data?.files[0]?.url);
+                  setChatGPTAdviceOpen(true);
+                }}
+              >
+                Chat GPT의 조언
+              </Button>
             </div>
           </div>
         </>
-      ) : (
+      )}
+      {!data && !flagError && (
+        <div className="loading">
+          <Stack sx={{ color: "grey" }}>
+            <CircularProgress size="300px" color="inherit" />
+          </Stack>
+        </div>
+      )}
+      {!data && flagError && (
         <div className="error">
           <WarningAmberRoundedIcon />
           <h1>이런!</h1>
           <p>공고 정보를 불러오는 중에 문제가 발생했습니다.</p>
-          <Button variant="contained" onClick={() => navigate("/")}>돌아가기</Button>
+          <Button variant="contained" onClick={() => navigate("/")}>
+            돌아가기
+          </Button>
         </div>
       )}
+
+      <Dialog
+        open={chatGPTAdviceOpen}
+        onClose={handleChatGPTAdviceClose}
+        aria-labelledby="alert-dialog-title"
+        aria-describedby="alert-dialog-description"
+        fullWidth
+        sx={{ textAlign: "center" }}
+      >
+        <DialogTitle id="alert-dialog-title" sx={{ textAlign: "left" }}>
+          {"Chat GPT의 조언"}
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            {chatGPTAdvice &&
+              chatGPTAdvice.split("\n").map((line, index) => {
+                return (
+                  <>
+                    <p key={index}>{line}</p>
+                    <br />
+                  </>
+                );
+              })}
+            {!chatGPTAdvice && (
+              <div style={{ margin: "40px 0" }}>
+                {chatGPTAdviceError ? (
+                  <WarningAmberRoundedIcon />
+                ) : (
+                  <CircularProgress />
+                )}
+                <h4>
+                  {chatGPTAdviceError ? "분석 실패!" : "지원 공고 분석중..."}
+                </h4>
+              </div>
+            )}
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleChatGPTAdviceClose}>닫기</Button>
+        </DialogActions>
+      </Dialog>
     </Style>
   );
 };

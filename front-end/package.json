@@ -9,7 +9,7 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "previewLan": "vite preview --host"
+    "previewLan": "vite preview --port 4000 --host"
   },
   "dependencies": {
     "@emotion/react": "^11.13.3",

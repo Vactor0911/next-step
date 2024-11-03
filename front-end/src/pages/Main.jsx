@@ -194,7 +194,7 @@ const Main = () => {
               field: item.ncsCdNmLst,
               region: item.workRgnNmLst,
               experience: item.acbgCondNmLst,
-              expireDate: String(item.decimalDay).replace("-", ""),
+              expireDate: item.decimalDay,
               url: item.srcUrl,
               color: rgb,
             };
@@ -207,7 +207,12 @@ const Main = () => {
   };
 
   useEffect(() => {
-    fetchData();
+    fetchData(
+      employmentTypeValues,
+      workRegionValues,
+      recruitmentFieldValues,
+      searchTitle
+    );
   }, []);
 
   return (
@@ -343,7 +348,10 @@ const Main = () => {
                       variant="h5"
                       component="div"
                     >
-                      D-{result.expireDate}
+                      D
+                      {result.expireDate < 0
+                        ? String(result.expireDate).replace("-", "+")
+                        : "-" + result.expireDate}
                     </Typography>
                   </div>
 

@@ -18,3 +18,6 @@ export const recruitmentFieldValuesAtom = atomWithStorage(
   []
 );
 export const searchTitleAtom = atomWithStorage("searchTitle", "");
+
+// ChatGPT의 조언
+export const chatGPTAdviceAtom = atom("");
